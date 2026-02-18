@@ -5,9 +5,9 @@
 ![release](https://img.shields.io/github/v/release/lengordy/net-watchdog?label=release)
 ![status](https://img.shields.io/badge/status-production-brightgreen)
 
-Production-grade self-healing watchdog for Docker-based VPS environments.
+Self-healing watchdog for Docker-based VPS environments.
 
-Detects network degradation and applies controlled, prioritized recovery.
+Detects network degradation and applies prioritized recovery with anti-flap protection.
 
 ---
 
@@ -70,6 +70,8 @@ Priority order:
 5. Optional reboot (explicitly enabled only)
 
 Actions are triggered only after consecutive failures and cooldown validation.
+
+No aggressive restarts. No blind loops.
 
 ---
 
