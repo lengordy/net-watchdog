@@ -1,0 +1,15 @@
+# Logs
+*.log
+
+# State files
+*.fail
+*.lock
+*.last_action
+*.last_status
+
+# OS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
