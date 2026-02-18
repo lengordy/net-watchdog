@@ -13,10 +13,7 @@ Net Watchdog performs multi-layer health checks and applies prioritized recovery
 
 ## Features
 
-- Default route check
-- Multi-target ping check
-- DNS resolution check (custom DNS server supported)
-- HTTPS reachability probe
+- Multi-layer health checks (route, ping, DNS, HTTPS)
 - Local TCP port verification
 - Docker daemon health check
 - Docker container state verification
@@ -25,7 +22,7 @@ Net Watchdog performs multi-layer health checks and applies prioritized recovery
 - MTU probe
 - Anti-flap fail counter
 - Cooldown between recovery attempts
-- Prioritized recovery logic
+- Prioritized recovery strategy
 - SELFTEST mode
 - DIAG mode
 - Optional auto-reboot (disabled by default)
@@ -35,24 +32,26 @@ Net Watchdog performs multi-layer health checks and applies prioritized recovery
 
 ## Architecture
 
-The watchdog evaluates multiple health layers:
+Health layers evaluated:
 
-1. Network layer (route + ping)
-2. DNS layer
+1. Network connectivity (route + ping)
+2. DNS resolution
 3. HTTPS reachability
-4. Local service port (TCP connect)
-5. Docker daemon health
+4. Local TCP port
+5. Docker daemon state
 6. Container running state
-7. Docker internal DNS resolution
+7. Docker internal DNS
 8. Memory pressure
 
-Recovery actions are prioritized:
+Recovery order:
 
 1. Restart container
 2. Restart Docker
 3. Restart systemd-resolved
 4. Restart systemd-networkd
 5. Optional system reboot (if explicitly enabled)
+
+Recovery is triggered only after consecutive confirmed failures.
 
 ---
 
@@ -65,20 +64,20 @@ Recovery actions are prioritized:
 - ping
 - dig
 - docker (optional but recommended)
-- systemd (for network/docker restart logic)
+- systemd (for restart logic)
 
 ---
 
 ## Configuration
 
-All configuration is handled via environment variables.
+Configuration is handled via environment variables.
 
-Minimum required (for Telegram alerts):
+Required (Telegram alerts):
 
 TG_TOKEN=your_bot_token  
 TG_CHAT_ID=your_chat_id  
 
-Optional configuration:
+Optional:
 
 DNS_HOST=example.com  
 DNS_SERVER=8.8.8.8  
@@ -113,53 +112,36 @@ Run once:
 
 ---
 
-## Selftest Mode
+## Modes
 
-Simulates success and sends a confirmation message:
+Selftest (sends confirmation message):
 
 SELFTEST=1 ./net-watchdog.sh
 
-SELFTEST and DIAG bypass the lock mechanism.
-
----
-
-## Diagnostic Mode
-
-Runs all checks but performs no recovery:
+Diagnostic mode (runs checks without recovery):
 
 DIAG=1 ./net-watchdog.sh
-
-Useful for troubleshooting and monitoring validation.
 
 ---
 
 ## Recovery Logic
 
-The watchdog only attempts recovery after:
+Recovery actions are applied only if:
 
-- MAX_FAILS consecutive failed checks
+- MAX_FAILS consecutive checks fail
 - Cooldown period has elapsed
 
 This prevents flapping and aggressive restarts.
 
 ---
 
-## Auto Reboot (Disabled by Default)
+## Auto Reboot
 
-To enable emergency reboot after repeated confirmed failures:
+Emergency reboot can be enabled explicitly:
 
 FORCE_REBOOT=1 ./net-watchdog.sh
 
-Reboot will only occur if failures exceed REBOOT_THRESHOLD.
-
----
-
-## Notes
-
-- Designed for single-node VPS environments.
-- Portable by default (does not require /run or /var/log).
-- Safe to run via cron or systemd timer.
-- Does not expose infrastructure-specific values.
+Reboot occurs only if failures exceed REBOOT_THRESHOLD.
 
 ---
 
