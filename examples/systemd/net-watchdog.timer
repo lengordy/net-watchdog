@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Net Watchdog periodically
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=20s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target
