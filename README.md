@@ -5,39 +5,47 @@
 ![Release](https://img.shields.io/github/v/release/lengordy/net-watchdog)
 ![Status](https://img.shields.io/badge/status-production-brightgreen)
 
-Production-grade self-healing network watchdog for Docker-based VPS environments.
+Self-healing network watchdog for Docker-based VPS environments.
 
-Net Watchdog performs multi-layer health checks and applies prioritized recovery logic to automatically remediate network and container-level failures.
+Detects network degradation and applies controlled, prioritized recovery.
 
 ---
 
 ## Quick Start
 
-1. Set Telegram credentials inside `net-watchdog.sh`:
+Clone the repository:
 
-    TG_TOKEN=your_bot_token  
-    TG_CHAT_ID=your_chat_id  
+```bash
+git clone https://github.com/lengordy/net-watchdog.git
+cd net-watchdog
+```
 
-2. Make executable:
+Set Telegram credentials inside `net-watchdog.sh`:
 
-    chmod +x net-watchdog.sh
+```bash
+export TG_TOKEN=your_bot_token
+export TG_CHAT_ID=your_chat_id
+```
 
-3. Run once:
+Run once:
 
-    ./net-watchdog.sh
+```bash
+bash net-watchdog.sh
+```
 
-4. (Optional) Install systemd timer:
+Optional: enable systemd timer:
 
-    sudo cp examples/systemd/net-watchdog.service /etc/systemd/system/  
-    sudo cp examples/systemd/net-watchdog.timer /etc/systemd/system/  
-    sudo systemctl daemon-reload  
-    sudo systemctl enable --now net-watchdog.timer  
+```bash
+sudo cp examples/systemd/net-watchdog.* /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now net-watchdog.timer
+```
 
 ---
 
 ## Overview
 
-The watchdog evaluates multiple health layers:
+Net Watchdog evaluates multiple health layers:
 
 - Default route availability
 - Multi-target ping
@@ -46,71 +54,69 @@ The watchdog evaluates multiple health layers:
 - Local TCP port connectivity
 - Docker daemon state
 - Container running state
-- Docker-internal DNS resolution
+- Docker-internal DNS
 - Memory pressure
 - MTU validation
 
-Failures are counted and confirmed before recovery is attempted.
+Failures are confirmed before any recovery action is triggered.
 
 ---
 
 ## Recovery Strategy
 
-Recovery is triggered only after consecutive confirmed failures.
+Recovery is applied in controlled stages:
 
-Actions are applied in the following order:
+1. Restart container  
+2. Restart Docker daemon  
+3. Restart systemd-resolved  
+4. Restart systemd-networkd  
+5. Optional system reboot (explicitly enabled)
 
-1. Restart container
-2. Restart Docker daemon
-3. Restart systemd-resolved
-4. Restart systemd-networkd
-5. Optional system reboot (if explicitly enabled)
-
-Cooldown logic prevents flapping and aggressive restarts.
-
----
-
-## Configuration
-
-Configuration is handled via environment variables.
-
-Required (Telegram alerts):
-
-    TG_TOKEN=your_bot_token  
-    TG_CHAT_ID=your_chat_id  
-
-Optional:
-
-    DNS_HOST=example.com  
-    DNS_SERVER=8.8.8.8  
-    VPN_PORT=443  
-    VPN_CONTAINER=app  
-
-    MAX_FAILS=2  
-    ACTION_COOLDOWN_SEC=60  
-    MAX_RAM_PERCENT=90  
-    REBOOT_THRESHOLD=5  
-    FORCE_REBOOT=0  
-
-Custom paths (optional):
-
-    LOG=./net-watchdog.log  
-    STATE_FAILS=./.net-watchdog.fail  
-    STATE_LAST_ACTION=./.net-watchdog.last_action  
-    STATE_LAST_STATUS=./.net-watchdog.last_status  
-    LOCK_FILE=./.net-watchdog.lock  
+Anti-flap logic and cooldown intervals prevent aggressive restarts.
 
 ---
 
 ## Modes
 
-Selftest (sends confirmation message):
+Selftest:
 
-    SELFTEST=1 ./net-watchdog.sh
+```bash
+SELFTEST=1 bash net-watchdog.sh
+```
 
-Diagnostic mode (runs checks without recovery actions):
+Diagnostic mode (no recovery):
 
-    DIAG=1 ./net-watchdog.sh
+```bash
+DIAG=1 bash net-watchdog.sh
+```
+
+---
+
+## Configuration
+
+All configuration is environment-based.
+
+Required:
+
+```bash
+TG_TOKEN=your_bot_token
+TG_CHAT_ID=your_chat_id
+```
+
+Optional tuning:
+
+```bash
+DNS_HOST=example.com
+DNS_SERVER=8.8.8.8
+VPN_PORT=443
+VPN_CONTAINER=app
+
+MAX_FAILS=2
+ACTION_COOLDOWN_SEC=60
+MAX_RAM_PERCENT=90
+REBOOT_THRESHOLD=5
+FORCE_REBOOT=0
+```
 
 ---
 
