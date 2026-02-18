@@ -95,17 +95,6 @@ FORCE_REBOOT=1 ./net-watchdog.sh
 
 ---
 
-## Philosophy
-
-- Designed for single-node VPS
-- Safe for cron or systemd timer
-- No hardcoded infrastructure
-- No external dependencies beyond standard Linux tools
-- Quiet when healthy
-- Loud when necessary
-
----
-
 ## License
 
 MIT
