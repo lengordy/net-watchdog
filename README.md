@@ -42,7 +42,7 @@ sudo systemctl enable --now net-watchdog.timer
 
 ---
 
-## What It Checks
+## Health Checks
 
 - Default route
 - Multi-target ping
