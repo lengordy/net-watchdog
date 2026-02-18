@@ -1,9 +1,13 @@
 # Net Watchdog
 
-Self-healing network watchdog for Docker-based services.
+![Shell](https://img.shields.io/badge/language-shell-green)
+![License](https://img.shields.io/badge/license-MIT-blue)
+![Release](https://img.shields.io/github/v/release/lengordy/net-watchdog)
+![Status](https://img.shields.io/badge/status-production-brightgreen)
 
-Production-grade Bash watchdog designed for VPS environments running Docker workloads.
-Implements multi-layer health checks, anti-flap logic, prioritized recovery and optional Telegram alerts.
+Production-grade self-healing network watchdog for Docker-based VPS environments.
+
+Net Watchdog performs multi-layer health checks and applies prioritized recovery logic to automatically remediate network and container-level failures.
 
 ---
 
