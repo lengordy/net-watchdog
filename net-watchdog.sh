@@ -24,6 +24,7 @@ PING_TARGETS=("1.1.1.1" "8.8.8.8")
 
 VPN_PORT="${VPN_PORT:-443}"
 VPN_CONTAINER="${VPN_CONTAINER:-app}"
+VPN_GRACE_SEC="${VPN_GRACE_SEC:-30}"
 
 SELFTEST="${SELFTEST:-0}"
 DIAG="${DIAG:-0}"
@@ -80,11 +81,20 @@ status_changed() {
   return 0
 }
 
+get_container_uptime() {
+  command -v docker >/dev/null 2>&1 || return 0
+  local started
+  started=$(docker inspect -f '{{.State.StartedAt}}' "$VPN_CONTAINER" 2>/dev/null) || return 0
+  local now started_epoch
+  now=$(date +%s)
+  started_epoch=$(date -d "$started" +%s 2>/dev/null) || return 0
+  echo $(( now - started_epoch ))
+}
+
 # ---------------- system info ----------------
 
 HOST=$(hostname 2>/dev/null || echo "unknown")
 UPTIME=$(uptime -p 2>/dev/null || echo "unknown")
-DEF_IF=$(ip route 2>/dev/null | awk '/default/ {print $5}' | head -n1)
 PUB_IP=$(curl -s --max-time 3 https://api.ipify.org || echo "n/a")
 
 # ---------------- checks ----------------
@@ -142,38 +152,9 @@ mtu_probe() {
   echo "mtu_fail"
 }
 
-# ---------------- fixes ----------------
-
-fix_container() {
-  command -v docker >/dev/null 2>&1 || return 0
-  log "[FIX] restart container"
-  docker restart "$VPN_CONTAINER" >/dev/null 2>&1 || true
-}
-
-fix_docker() {
-  command -v systemctl >/dev/null 2>&1 || return 0
-  log "[FIX] restart docker"
-  systemctl restart docker || true
-}
-
-fix_resolved() {
-  command -v systemctl >/dev/null 2>&1 || return 0
-  log "[FIX] restart resolved"
-  systemctl restart systemd-resolved || true
-  resolvectl flush-caches >/dev/null 2>&1 || true
-}
-
-fix_networkd() {
-  command -v systemctl >/dev/null 2>&1 || return 0
-  log "[FIX] restart networkd"
-  systemctl restart systemd-networkd || true
-}
-
 # ---------------- main ----------------
 
-if [[ "$SELFTEST" != "1" && "$DIAG" != "1" ]]; then
-  with_lock
-fi
+[[ "$SELFTEST" != "1" && "$DIAG" != "1" ]] && with_lock
 
 if [[ "$SELFTEST" == "1" ]]; then
   tg "NET SELFTEST OK
@@ -199,20 +180,31 @@ check_container_running && CONTAINER=1
 
 STATUS="route=$ROUTE ping=$PING dns=$DNS https=$HTTPS vpn=$VPN docker_dns=$DOCKER_DNS docker=$DOCKER_ALIVE container=$CONTAINER ram=$RAM $MTU_NOTE"
 
-if [[ "$DIAG" == "1" ]]; then
-  tg "NET DIAG
+# ---------- ALL OK ----------
+if [[ $ROUTE -eq 1 && $PING -eq 1 && $DNS -eq 1 && $VPN -eq 1 && $RAM -eq 1 ]]; then
+  if [[ -f "$STATE_FAILS" ]]; then
+    tg "NET OK
+
+Host: $HOST
+IP: $PUB_IP
 
 $STATUS"
+  fi
+  fail_reset
+  echo "OK" > "$STATE_LAST_STATUS"
   exit 0
 fi
 
-if [[ $ROUTE -eq 1 && $PING -eq 1 && $DNS -eq 1 && $VPN -eq 1 && $RAM -eq 1 ]]; then
-  fail_reset
-  exit 0
+# ---- GRACE FOR CONTAINER RESTART ----
+if [[ $VPN -eq 0 ]]; then
+  UPTIME_SEC=$(get_container_uptime)
+  if [[ "$UPTIME_SEC" -lt "$VPN_GRACE_SEC" ]]; then
+    log "[INFO] vpn fail ignored (uptime ${UPTIME_SEC}s < ${VPN_GRACE_SEC}s)"
+    exit 0
+  fi
 fi
 
 FAILS=$(fail_inc)
-
 log "[WARN] $STATUS fail=$FAILS"
 
 if status_changed "$STATUS" || [[ $FAILS -ge $MAX_FAILS ]]; then
