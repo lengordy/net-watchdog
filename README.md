@@ -11,6 +11,16 @@ Detects network degradation and applies prioritized recovery with anti-flap prot
 
 ---
 
+## What's New (v1.1.0)
+
+- Container uptime-based VPN grace logic (`VPN_GRACE_SEC`)
+- Prevents false alerts during planned container restarts
+- Explicit `NET OK` notification after recovery
+- Improved Telegram state transitions
+- Added `.env.example` configuration template
+
+---
+
 ## Quick Start
 
 ```bash
@@ -19,7 +29,13 @@ cd net-watchdog
 chmod +x net-watchdog.sh
 ```
 
-Set required environment variables:
+Create environment file:
+
+```bash
+cp .env.example .env
+```
+
+Or export variables manually:
 
 ```bash
 export TG_TOKEN=your_bot_token
@@ -54,6 +70,7 @@ sudo systemctl enable --now net-watchdog.timer
 - Docker internal DNS
 - Memory pressure
 - MTU viability
+- Container uptime grace handling
 
 ---
 
