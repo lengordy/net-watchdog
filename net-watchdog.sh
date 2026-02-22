@@ -50,10 +50,7 @@ tg() {
 
 with_lock() {
   exec 9>"$LOCK_FILE"
-  if ! flock -n 9; then
-    log "[INFO] another instance running, skip"
-    exit 0
-  fi
+  flock -n 9 || exit 0
 }
 
 cooldown_ok() {
@@ -91,12 +88,6 @@ get_container_uptime() {
   echo $(( now - started_epoch ))
 }
 
-# ---------------- system info ----------------
-
-HOST=$(hostname 2>/dev/null || echo "unknown")
-UPTIME=$(uptime -p 2>/dev/null || echo "unknown")
-PUB_IP=$(curl -s --max-time 3 https://api.ipify.org || echo "n/a")
-
 # ---------------- checks ----------------
 
 check_route() { ip route show default >/dev/null 2>&1; }
@@ -108,9 +99,20 @@ check_ping() {
   return 1
 }
 
+# ===== UPDATED DNS (UDP + TCP fallback) =====
 check_dns() {
-  timeout 3 dig +time=2 +tries=1 @"$DNS_SERVER" "$DNS_HOST" A >/dev/null 2>&1
+  if timeout 3 dig +time=2 +tries=1 @"$DNS_SERVER" "$DNS_HOST" A >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if timeout 4 dig +tcp +time=3 +tries=1 @"$DNS_SERVER" "$DNS_HOST" A >/dev/null 2>&1; then
+    log "[INFO] DNS UDP timeout, TCP fallback OK"
+    return 0
+  fi
+
+  return 1
 }
+# ============================================
 
 check_https() {
   timeout 4 curl -s --connect-timeout 3 https://"$DNS_HOST" >/dev/null 2>&1
@@ -146,27 +148,18 @@ check_memory() {
   [[ "$used" -lt "$MAX_RAM_PERCENT" ]]
 }
 
-mtu_probe() {
-  ping -c1 -W1 -M do -s 1472 1.1.1.1 >/dev/null 2>&1 && { echo "mtu>=1500"; return; }
-  ping -c1 -W1 -M do -s 1360 1.1.1.1 >/dev/null 2>&1 && { echo "mtu>=1388"; return; }
-  echo "mtu_fail"
-}
+# -------- recovery --------
+
+fix_container() { docker restart "$VPN_CONTAINER" >/dev/null 2>&1 || true; }
+fix_docker() { systemctl restart docker || true; }
+fix_resolved() { systemctl restart systemd-resolved || true; }
+fix_networkd() { systemctl restart systemd-networkd || true; }
 
 # ---------------- main ----------------
 
 [[ "$SELFTEST" != "1" && "$DIAG" != "1" ]] && with_lock
 
-if [[ "$SELFTEST" == "1" ]]; then
-  tg "NET SELFTEST OK
-
-Host: $HOST
-Uptime: $UPTIME
-IP: $PUB_IP"
-  exit 0
-fi
-
 ROUTE=0 PING=0 DNS=0 HTTPS=0 VPN=0 DOCKER_DNS=0 DOCKER_ALIVE=0 RAM=0 CONTAINER=0
-MTU_NOTE=$(mtu_probe)
 
 check_route && ROUTE=1
 check_ping && PING=1
@@ -178,73 +171,22 @@ check_docker_alive && DOCKER_ALIVE=1
 check_memory && RAM=1
 check_container_running && CONTAINER=1
 
-STATUS="route=$ROUTE ping=$PING dns=$DNS https=$HTTPS vpn=$VPN docker_dns=$DOCKER_DNS docker=$DOCKER_ALIVE container=$CONTAINER ram=$RAM $MTU_NOTE"
+STATUS="route=$ROUTE ping=$PING dns=$DNS https=$HTTPS vpn=$VPN docker_dns=$DOCKER_DNS docker=$DOCKER_ALIVE container=$CONTAINER ram=$RAM"
 
-# ---------- ALL OK ----------
 if [[ $ROUTE -eq 1 && $PING -eq 1 && $DNS -eq 1 && $VPN -eq 1 && $RAM -eq 1 ]]; then
-  if [[ -f "$STATE_FAILS" ]]; then
-    tg "NET OK
-
-Host: $HOST
-IP: $PUB_IP
-
-$STATUS"
-  fi
   fail_reset
-  echo "OK" > "$STATE_LAST_STATUS"
   exit 0
 fi
 
-# ---- GRACE FOR CONTAINER RESTART ----
-if [[ $VPN -eq 0 ]]; then
-  UPTIME_SEC=$(get_container_uptime)
-  if [[ "$UPTIME_SEC" -lt "$VPN_GRACE_SEC" ]]; then
-    log "[INFO] vpn fail ignored (uptime ${UPTIME_SEC}s < ${VPN_GRACE_SEC}s)"
-    exit 0
-  fi
-fi
-
 FAILS=$(fail_inc)
-log "[WARN] $STATUS fail=$FAILS"
-
-if status_changed "$STATUS" || [[ $FAILS -ge $MAX_FAILS ]]; then
-  tg "NET DEGRADED ($FAILS/$MAX_FAILS)
-
-$STATUS"
-fi
 
 [[ $FAILS -lt $MAX_FAILS ]] && exit 0
 ! cooldown_ok && exit 0
 
 mark_action
-tg "RECOVERY ATTEMPT
-
-$STATUS"
 
 [[ $RAM -eq 0 ]] && fix_container
 [[ $VPN -eq 0 ]] && fix_container
 [[ $DOCKER_DNS -eq 0 || $DOCKER_ALIVE -eq 0 ]] && fix_docker
 [[ $DNS -eq 0 && $PING -eq 1 ]] && fix_resolved
 [[ $ROUTE -eq 0 || $PING -eq 0 ]] && fix_networkd
-
-sleep 4
-
-ROUTE=0 PING=0 DNS=0 VPN=0 RAM=0
-check_route && ROUTE=1
-check_ping && PING=1
-check_dns && DNS=1
-check_vpn_port && check_vpn_tcp && VPN=1
-check_memory && RAM=1
-
-if [[ $ROUTE -eq 1 && $PING -eq 1 && $DNS -eq 1 && $VPN -eq 1 && $RAM -eq 1 ]]; then
-  tg "NET RESTORED"
-  fail_reset
-else
-  if [[ $FAILS -ge $REBOOT_THRESHOLD && "$FORCE_REBOOT" == "1" ]]; then
-    tg "CRITICAL FAILURE - REBOOTING"
-    sleep 2
-    reboot
-  else
-    tg "STILL BROKEN"
-  fi
-fi
