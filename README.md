@@ -163,3 +163,33 @@ FORCE_REBOOT=1 ./net-watchdog.sh
 ## License
 
 MIT
+
+---
+
+## Execution Flow
+
+```mermaid
+flowchart TD
+
+A[systemd timer] --> B[watchdog execution]
+B --> C{health validation}
+
+C -->|healthy| D[exit]
+
+C -->|degraded| E[increment failure counter]
+
+E --> F{threshold reached}
+
+F -->|no| D
+
+F -->|yes| G{cooldown satisfied?}
+
+G -->|no| D
+
+G -->|yes| H[execute recovery sequence]
+
+H --> I[re-validate infrastructure]
+
+I -->|recovered| J[reset state + notify]
+
+I -->|still degraded| K[wait for next cycle or escalate]
