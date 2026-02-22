@@ -166,30 +166,24 @@ MIT
 
 ---
 
-## Execution Flow
+## Execution Model
 
 ```mermaid
-flowchart TD
+flowchart LR
 
-A[systemd timer] --> B[watchdog execution]
-B --> C{health validation}
+T[systemd timer] --> W[watchdog execution]
 
-C -->|healthy| D[exit]
+W --> H[health validation]
 
-C -->|degraded| E[increment failure counter]
+H -->|healthy| OK[exit]
 
-E --> F{threshold reached}
+H -->|degraded| F[failure counter]
 
-F -->|no| D
+F -->|below threshold| OK
 
-F -->|yes| G{cooldown satisfied?}
+F -->|threshold reached + cooldown ok| R[recovery sequence]
 
-G -->|no| D
+R --> V[re-validate]
 
-G -->|yes| H[execute recovery sequence]
-
-H --> I[re-validate infrastructure]
-
-I -->|recovered| J[reset state + notify]
-
-I -->|still degraded| K[wait for next cycle or escalate]
+V -->|recovered| OK
+V -->|still degraded| WAIT[next cycle / escalate]
