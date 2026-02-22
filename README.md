@@ -19,7 +19,8 @@ protection and controlled escalation.
 Net Watchdog is a lightweight infrastructure guardian for single-node
 Docker VPS environments.
 
-It continuously validates:
+It continuously validates infrastructure integrity using resilient,
+multi-layer health verification::
 
 -   Network availability
 -   DNS integrity
@@ -80,7 +81,7 @@ sudo systemctl enable --now net-watchdog.timer
 
 -   Default route validation
 -   Multi-target ICMP probing
--   DNS resolution check
+-   Dual-protocol DNS validation (UDP primary + TCP fallback)
 -   HTTPS reachability test
 -   Local TCP socket validation
 -   Docker daemon health
@@ -89,6 +90,19 @@ sudo systemctl enable --now net-watchdog.timer
 -   Memory usage watchdog
 -   MTU probing
 -   Container uptime-based grace handling
+
+------------------------------------------------------------------------
+
+### DNS Stability Design
+
+DNS verification uses UDP as primary transport with TCP fallback.
+If UDP resolution fails but TCP succeeds, the event is treated as
+transient network jitter and does not trigger degradation state.
+
+Only simultaneous UDP and TCP failure is considered DNS degradation.
+
+This design eliminates false-positive alerts in real-world VPS
+environments where occasional UDP packet loss may occur.
 
 ------------------------------------------------------------------------
 
@@ -136,13 +150,13 @@ FORCE_REBOOT=1 ./net-watchdog.sh
 
 ------------------------------------------------------------------------
 
-## What's New (v1.1.0)
+## What's New (v1.2.0)
 
--   Container uptime-based VPN grace logic (`VPN_GRACE_SEC`)
--   Suppresses false alerts during planned restarts
--   Explicit `NET OK` notification after confirmed recovery
--   Improved Telegram state transitions
--   Added `.env.example` configuration template
+-   Resilient dual-protocol DNS validation (UDP primary + TCP fallback)
+-   Eliminates false-positive DNS degradation caused by transient UDP jitter
+-   Improved production stability under network micro-fluctuations
+-   No additional services required (no local DNS cache dependency)
+-   Maintains deterministic recovery logic and anti-flap protection
 
 ------------------------------------------------------------------------
 
